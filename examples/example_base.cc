@@ -71,6 +71,8 @@ void TrajOptExample::RunModelPredictiveControl(
   // Construct the multibody plant system model
   MultibodyPlantConfig config;
   config.time_step = options.sim_time_step;
+  config.discrete_contact_approximation =
+      options.sim_discrete_contact_approximation;
   auto [plant, scene_graph] = AddMultibodyPlant(config, &builder);
   CreatePlantModelForSimulation(&plant);
   plant.Finalize();

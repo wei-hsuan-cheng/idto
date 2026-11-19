@@ -13,6 +13,7 @@
 
 #include "optimizer/penta_diagonal_solver.h"
 #include "utils/profiler.h"
+#include <drake/common/extract_double.h>
 #include <drake/geometry/scene_graph_inspector.h>
 #include <drake/multibody/math/spatial_algebra.h>
 #include <drake/systems/framework/diagram.h>
@@ -1817,17 +1818,19 @@ void TrajectoryOptimizer<T>::SaveLinesearchResidual(
     scratch_state->set_q(state.q());
     scratch_state->AddToQ(alpha * dq);
     if (params_.normalize_quaternions) NormalizeQuaternions(scratch_state);
-    data_file << EvalCost(*scratch_state) - EvalCost(state) << ", ";
+    // ExtractDoubleOrThrow: drake::ad::AutoDiff (Drake >= 1.33's AutoDiffXd) has no operator<<.
+    data_file << drake::ExtractDoubleOrThrow(EvalCost(*scratch_state) - EvalCost(state))
+              << ", ";
 
     // Record the norm of the gradient
     const VectorX<T>& g = EvalGradient(*scratch_state);
-    data_file << g.norm() << ", ";
+    data_file << drake::ExtractDoubleOrThrow(g.norm()) << ", ";
 
     // Record the norm of the search direction
-    data_file << dq.norm() << ", ";
+    data_file << drake::ExtractDoubleOrThrow(dq.norm()) << ", ";
 
     // Record the derivative of the linesearch residual w.r.t alpha
-    data_file << g.dot(dq) << "\n";
+    data_file << drake::ExtractDoubleOrThrow(g.dot(dq)) << "\n";
 
     alpha += dalpha;
   }

@@ -88,3 +88,7 @@ sim_time_step : 1e-3
 sim_realtime_rate : 0.0
 Kp : [0, 0, 0, 100.0, 100.0]
 Kd : [0, 0, 0, 5.0, 5.0]
+
+# Simulation plant's contact solver: TAMSI, Drake 1.30's default, which these settings were tuned with;
+# with Drake >= 1.31's default ("lagged", SAP) the hopper covers 0.27 m instead of 0.38 m.
+sim_discrete_contact_approximation : "tamsi"

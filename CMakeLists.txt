@@ -34,6 +34,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_compile_options(-Werror -Wall)  # treat warnings as errors
+# GCC >= 12 reports false-positive -Warray-bounds / -Wstringop-overflow inside libstdc++'s memmove at -O3 (GCC bug
+# 107852), e.g. in trajectory_optimizer_solution.cc on Ubuntu 24.04's GCC 13; -Werror would make them fatal.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
+  add_compile_options(-Wno-array-bounds -Wno-stringop-overflow)
+endif()
 add_compile_options(-O3)
 # add_compile_definitions(ENABLE_TIMERS)  # extra profiling
 

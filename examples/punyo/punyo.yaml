@@ -143,3 +143,6 @@ Kd : [100,
       80, 50, 50, 50, 50,
       0.0, 0.0, 0.0,
       0.0, 0.0, 0.0]
+# Simulation plant's contact solver: TAMSI, Drake 1.30's default, which these settings were tuned with;
+# with Drake >= 1.31's default ("lagged", SAP) the ball rolls away instead of being lifted.
+sim_discrete_contact_approximation : "tamsi"

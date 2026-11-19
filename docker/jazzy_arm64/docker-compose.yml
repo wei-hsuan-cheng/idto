@@ -1,0 +1,37 @@
+# The idto_jazzy container: native ARM64, ROS 2 Jazzy + Drake 1.53.0 (see Dockerfile).
+#
+#   docker compose -f docker/jazzy_arm64/docker-compose.yml build
+#   docker compose -f docker/jazzy_arm64/docker-compose.yml up -d
+#   docker exec -it idto_jazzy bash
+#
+# ~/src is mounted at /root/src (on a Parallels VM the Mac's ~/src is /media/psf/Home/src, the default here). Meshcat
+# (7000, 7001, ... in the container) is published on host ports 7005-7009, next to idto_humble's 7000-7004:
+# http://<host>:7005. Display and GPU wiring as ros2_docker's ros_jazzy (virgl on Parallels). The build directory is a
+# named volume, so recreating the container keeps the build.
+services:
+  idto_jazzy:
+    build: .
+    image: idto_jazzy
+    container_name: idto_jazzy
+    command: bash
+    stdin_open: true
+    tty: true
+    privileged: true
+    ipc: host
+    network_mode: bridge
+    ports:
+      - "7005-7009:7000-7004"
+    environment:
+      DISPLAY: ${DISPLAY:-:1}
+      QT_X11_NO_MITSHM: "1"
+      XAUTHORITY: /tmp/.docker.xauth
+    volumes:
+      - ${SRC_DIR:-/media/psf/Home/src}:/root/src
+      - idto_build_arm64:/root/idto_build
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/.docker.xauth:/tmp/.docker.xauth
+    devices:
+      - /dev/dri:/dev/dri
+
+volumes:
+  idto_build_arm64:

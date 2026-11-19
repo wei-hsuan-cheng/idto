@@ -144,3 +144,7 @@ Kd : [1e-3, 1e-3, 1e-3, 1e-3,
       1e-3, 1e-3, 1e-3, 1e-3,
       0, 0, 0,
       0, 0, 0]
+
+# Simulation plant's contact solver: TAMSI, Drake 1.30's default, which these settings were tuned with;
+# with Drake >= 1.31's default ("lagged", SAP) the simulated ball slips out of the hand.
+sim_discrete_contact_approximation : "tamsi"

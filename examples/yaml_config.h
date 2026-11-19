@@ -70,6 +70,7 @@ struct TrajOptExampleParams {
     a->Visit(DRAKE_NVP(sim_time));
     a->Visit(DRAKE_NVP(sim_time_step));
     a->Visit(DRAKE_NVP(sim_realtime_rate));
+    a->Visit(DRAKE_NVP(sim_discrete_contact_approximation));
     a->Visit(DRAKE_NVP(Kp));
     a->Visit(DRAKE_NVP(Kd));
     a->Visit(DRAKE_NVP(feed_forward));
@@ -183,6 +184,9 @@ struct TrajOptExampleParams {
   double sim_time{10.0};            // Time to simulate for, in seconds
   double sim_time_step{1e-3};       // Simulator time step
   double sim_realtime_rate{1.0};    // Simulator realtime rate
+  // Simulation plant's discrete contact approximation (MultibodyPlantConfig): "" for Drake's default, which is
+  // TAMSI up to Drake 1.30 and "lagged" (SAP) in newer releases; "tamsi" reproduces Drake 1.30's simulation.
+  std::string sim_discrete_contact_approximation{""};
 
   // Gains for the low-level PD+ controller that operates between MPC
   // iterations. Terms related to unactuated DoFs are ignored.

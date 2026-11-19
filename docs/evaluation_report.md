@@ -15,8 +15,11 @@ Logs, CSVs and Meshcat recordings are in `~/src/mpc/contact_implicit_mpc/idto_ru
   predicts, and the configured derivatives match central differences to about 2e-7 for joints and ball position.
 - One systematic error: every gradient method drops the dN+/dq term, so derivatives along a rotating floating base
   are 0.1-6.6 % off.
-- No real-time result yet. The only ARM64-compatible way to run Drake 1.30 here is x86 emulation, under which every
-  MPC update misses its deadline; native timing is still to do.
+- Real time: yes, natively. Under x86 emulation every MPC update misses its deadline. Ported to Drake 1.53 (four small
+  changes, still building against 1.30) and run natively on ARM64, every MPC example meets its configured rate with
+  2.6-7.9x headroom, for example spinner 549 Hz against 200 and mini_cheetah 242 Hz against 60 (section 8).
+- On Drake 1.53 the simulated plant changes: the new default contact solver (SAP) drops Allegro's ball. The planner
+  itself is unchanged (section 8).
 
 ## 1. Environment and reproduction
 
@@ -295,7 +298,8 @@ The contact point and the contacting material points are different objects, and 
 
 **Gaps for a whole-body ID MPC.**
 
-1. **Speed is unknown natively.** Under emulation every example misses its deadline by 4-8x.
+1. **Speed: real time natively (section 8).** Under emulation every example misses its deadline by 4-8x; natively
+   on ARM64 every MPC example meets its rate with 2.6-7.9x headroom.
    - Derivatives are forward differences by default: nq + 1 inverse-dynamics and geometry evaluations per knot, so the
      cost grows with nq and with the number of sphere pairs.
    - A real-time verdict needs native timing, either on Ubuntu 24.04 ARM64 with Drake ≥ 1.53 (IDTO ported to the
@@ -316,8 +320,8 @@ The contact point and the contacting material points are different objects, and 
 5. **Closed loop is a synchronous simulation.** There is no asynchronous executor: latency is modelled as exactly
    one replan period. A deployment needs the solver in its own thread with plan timestamping, which the examples do
    not provide.
-6. **Old pinned Drake.** IDTO pins Drake 1.30 (2024); ARM64 Linux needs 1.53+, so a port is unavoidable on this
-   hardware.
+6. **Old pinned Drake.** IDTO pins Drake 1.30 (2024); ARM64 Linux needs 1.53+. The port took four small changes
+   (section 8). Drake's newer simulation defaults change some examples' closed-loop outcomes.
 
 **Assessment.** IDTO is a good starting point for the contact formulation and the optimizer structure: smooth
 signed-distance contacts between arbitrary sphere sets, verified moving-contact behaviour, and an inverse-dynamics
@@ -331,3 +335,81 @@ It is not yet a WB-ID MPC. It needs:
 
 Of those, native timing is the next step, since the rate decides whether faster derivatives (autodiff or analytic
 contact derivatives on the sphere pairs) are required before anything else.
+
+## 8. Native ARM64: Drake 1.53 port and real-time timing
+
+Branch `eval/arm64`.
+
+**Container.**
+- `idto_jazzy` (`docker/jazzy_arm64/`): native ARM64, on top of the `ros_jazzy` image from `ros2_docker`, so it has
+  the virgl GPU.
+- Ubuntu 24.04, GCC 13.3.0, CMake 3.28.3, Python 3.12.3, numpy 1.26.4.
+- Drake 1.53.0 (`211b5ae66d3ac16c5264b0ceea1902309f698901`), the first release with Linux ARM64 binaries.
+- Meshcat on host ports 7005-7009.
+- Build: 3 min native, against 12.5 min emulated.
+
+**The port.** All changes are version-neutral; the x86 Humble / Drake 1.30 build was rebuilt from the same tree and
+still passes 23/23.
+
+| change | why |
+|---|---|
+| `CMakeLists.txt`: for GCC >= 12, `-Wno-array-bounds -Wno-stringop-overflow` | GCC 13 false positives inside libstdc++'s `memmove` at `-O3` (bug 107852), fatal under `-Werror` |
+| `optimizer/trajectory_optimizer.cc`: `drake::ExtractDoubleOrThrow` in `SaveLinesearchResidual` | `AutoDiffXd` is `drake::ad::AutoDiff` since Drake 1.33, with no `operator<<` |
+| `optimizer/test/trajectory_optimizer_test.cc`: `plant.GetFloatingBaseBodies()` instead of `body.is_floating()` | deprecated in 1.53; its replacement `is_floating_base_body()` does not exist in 1.30 |
+| `examples/yaml_config.h`, `example_base.cc`: YAML option `sim_discrete_contact_approximation` (default `""` = Drake's default) | Drake's default simulation contact solver changed from TAMSI (1.30) to `lagged` SAP |
+| `allegro_hand.yaml`, `punyo.yaml`, `hopper.yaml`: `sim_discrete_contact_approximation: "tamsi"` | restores their 1.30 closed-loop behaviour (below) |
+
+**Tests: 23/23 pass.** The example smoke tests run 10-17x faster than emulated. `trajectory_optimizer_test` took
+41 s once only because Drake's `PackageMap` downloaded RobotLocomotion/models on first use; run again, every case
+takes 13 ms or less.
+
+**MPC timing, native ARM64** (`arm64/examples/<name>/mpc_timing.csv`, the same instrumentation):
+
+| example | target | solve median / p95 / p99 / max [ms] | rate (median) | update median / max [ms] | misses | sim/wall |
+|---|---|---|---|---|---|---|
+| pendulum | 300 Hz | 1.27 / 1.80 / 2.12 / 4.95 | 789 Hz | 1.51 / 6.69 | 5 / 1500 (0.3 %) | 1.99 |
+| acrobot | 300 Hz | 1.65 / 2.07 / 2.38 / 2.91 | 607 Hz | 1.97 / 3.30 | 0 | 1.58 |
+| **spinner** | 200 Hz | 1.82 / 2.23 / 2.44 / 3.32 | 549 Hz | 2.23 / 3.95 | 0 | 1.99 |
+| hopper | 100 Hz | 2.78 / 3.33 / 4.31 / 5.66 | 360 Hz | 3.32 / 6.68 | 0 | 2.66 |
+| jaco_ball | 100 Hz | 3.44 / 3.77 / 4.67 / 7.81 | 291 Hz | 3.85 / 8.50 | 0 | 2.36 |
+| jaco | 20 Hz | 13.49 / 14.46 / 15.10 / 17.25 | 74 Hz | 14.73 / 19.16 | 0 | 2.47 |
+| **dual_jaco** | 20 Hz | 19.11 / 20.43 / 23.37 / 26.00 | 52 Hz | 20.26 / 27.30 | 0 | 1.00 (throttled) |
+| **mini_cheetah** | 60 Hz | 4.13 / 4.48 / 5.30 / 37.02 | 242 Hz | 5.05 / 38.06 | 1 / 600 (0.2 %) | 2.32 |
+| **allegro_hand** | 10 Hz | 24.43 / 25.40 / 30.88 / 34.65 | 41 Hz | 26.47 / 37.28 | 0 | 1.00 (throttled) |
+| punyo | 15 Hz | 22.32 / 30.40 / 49.33 / 211.61 | 45 Hz | 24.16 / 215.93 | 2 / 150 (1.3 %) | 1.00 (throttled) |
+
+- **Initial full solves** take 0.04-2.7 s, against 0.6-61 s emulated.
+- **Speed-up over emulation:** 10-24x per update.
+- **Deadline misses** are isolated outliers: a few ms for pendulum, 37 ms for mini_cheetah, 212 ms for punyo.
+- **sim/wall of 1.00** means the run is throttled by `sim_realtime_rate: 1`; the others run faster than real time.
+
+**Planning is unchanged; the simulated plant is not.** The initial `dual_jaco` and `allegro_hand` solves on ARM64 /
+Drake 1.53 match x86 / Drake 1.30 to about 1e-9 (same cost history, `q[T]` and torques).
+
+The closed-loop outcomes differ because Drake 1.53 simulates contact differently. Its default discrete solver is
+`lagged` (SAP), where 1.30 used TAMSI, and its hydroelastic contact also changed. Repeated runs are bit-identical, so
+these are deterministic differences:
+
+| example | 1.30 x86 (TAMSI) | 1.53 SAP (`lagged`, default) | 1.53 TAMSI | shipped on `eval/arm64` |
+|---|---|---|---|---|
+| allegro_hand | 12.2 deg, ball kept (16 mm) | **ball dropped** (1.8 m, 158 deg) | 18.5 deg, 27 mm | TAMSI |
+| punyo | ball at (0.19, 0.37, 0.79) | **ball rolled away** (4.2, 6.9, 0.2) | (0.19, 0.37, 0.80) | TAMSI |
+| hopper | x -0.375 m | x -0.265 m | x -0.386 m | TAMSI |
+| dual_jaco | 4.2 deg, z 0.105 m | 17.5 deg, z 0.105 m | **not lifted** (46.6 deg, z 0.075) | default (SAP) |
+
+The other examples succeed on Drake 1.53's default:
+
+| example | outcome on Drake 1.53 |
+|---|---|
+| pendulum | upright, error 0.001 rad |
+| acrobot | (3.139, 0.010) |
+| spinner | 4.56 rad in 5 s |
+| jaco_ball | ball y 0.093 m |
+| jaco | box at 7.2 deg, (0.475, -0.100, 0.075) |
+| mini_cheetah | 3.43 m in 10 s, max tilt 8.8 deg |
+
+dual_jaco does not reproduce 1.30 under either solver. Its arms, box and ground are hydroelastic, so the remaining
+difference lies in Drake's hydroelastic simulation between versions, not in IDTO.
+
+**Gradients.** `contact_gradient_check` on Drake 1.53 reproduces section 5, including the dN+/dq bias: 6.64e-2 along
+a ball rotation for all three methods.

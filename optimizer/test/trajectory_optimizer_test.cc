@@ -127,7 +127,8 @@ GTEST_TEST(TrajectoryOptimizerTest, QuaternionDofs) {
 
   const int nq = plant.num_positions();
   const int nv = plant.num_velocities();
-  EXPECT_TRUE(body.is_floating());
+  // Not body.is_floating(): deprecated in newer Drake, and its replacement is_floating_base_body() is not in 1.30.
+  EXPECT_TRUE(plant.GetFloatingBaseBodies().count(body.index()) == 1);
   ASSERT_EQ(nq, 7);
   ASSERT_EQ(nv, 6);
 
