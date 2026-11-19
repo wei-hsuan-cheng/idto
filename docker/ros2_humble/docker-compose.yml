@@ -1,0 +1,43 @@
+# The idto_humble container: ROS 2 Humble x86-64 + Drake 1.30.0 (see Dockerfile; ARM64 hosts need the QEMU binfmt
+# registration noted there).
+#
+#   docker compose -f docker/ros2_humble/docker-compose.yml build
+#   docker compose -f docker/ros2_humble/docker-compose.yml up -d
+#   docker exec -it idto_humble bash
+#
+# ~/src is mounted at /root/src (on a Parallels VM the Mac's ~/src is /media/psf/Home/src, the default here; elsewhere
+# SRC_DIR=$HOME/src). Meshcat (port 7000, then 7001, ...) is published on the host: http://<host>:7000.
+#
+# Display and GPU wiring as ros2_docker's ros_jazzy (privileged, host IPC, /dev/dri, X11 on the VM desktop :1; allow
+# root on the X server first, see ros2_docker's README). An x86 container on an ARM64 host still renders in software
+# (llvmpipe), see the Dockerfile; a native container gets virgl.
+#
+# The build directory is a named volume, so recreating the container keeps the build.
+services:
+  idto_humble:
+    build: .
+    platform: linux/amd64
+    image: idto_humble
+    container_name: idto_humble
+    command: bash
+    stdin_open: true
+    tty: true
+    privileged: true
+    ipc: host
+    network_mode: bridge
+    ports:
+      - "7000-7004:7000-7004"
+    environment:
+      DISPLAY: ${DISPLAY:-:1}
+      QT_X11_NO_MITSHM: "1"
+      XAUTHORITY: /tmp/.docker.xauth
+    volumes:
+      - ${SRC_DIR:-/media/psf/Home/src}:/root/src
+      - idto_build:/root/idto_build
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /tmp/.docker.xauth:/tmp/.docker.xauth
+    devices:
+      - /dev/dri:/dev/dri
+
+volumes:
+  idto_build:

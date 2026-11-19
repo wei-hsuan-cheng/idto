@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "optimizer/problem_definition.h"
@@ -94,7 +95,21 @@ class ModelPredictiveController : public LeafSystem<double> {
       const TrajectoryOptimizerSolution<double>& solution,
       const double start_time, StoredTrajectory* stored_trajectory) const;
 
+  /**
+   * Timing instrumentation: write one CSV row per MPC update (simulated time,
+   * wall-clock time of the whole update and of SolveFromWarmStart, the
+   * optimizer's own solve_time, and the number of iterations).
+   */
+  void SaveTimingCsv(const std::string& filename) const;
+
  private:
+  struct UpdateTiming {
+    double sim_time;
+    double update_wall_ms;
+    double solve_wall_ms;
+    double solve_time_reported_ms;
+    int iterations;
+  };
   /**
    * Re-solve the trajectory optimization problem and store the result in the
    * discrete state of this system.
@@ -145,6 +160,9 @@ class ModelPredictiveController : public LeafSystem<double> {
 
   // Index for the abstract state used to store optimal trajectories
   drake::systems::AbstractStateIndex stored_trajectory_;
+
+  // Timing of each MPC update (instrumentation), appended by UpdateAbstractState
+  mutable std::vector<UpdateTiming> timing_log_;
 };
 
 /// A simple system block that recieves a StoredTrajectory (at a low frequency)

@@ -1,5 +1,7 @@
 #include "examples/mpc_controller.h"
 
+#include <chrono>
+#include <fstream>
 #include <iostream>
 
 namespace idto {
@@ -42,6 +44,7 @@ ModelPredictiveController::ModelPredictiveController(
 
 EventStatus ModelPredictiveController::UpdateAbstractState(
     const Context<double>& context, State<double>* state) const {
+  const auto update_start = std::chrono::steady_clock::now();
   DRAKE_DEMAND(optimizer_.params().q_nom_relative_to_q_init.size() ==
                 optimizer_.plant().num_positions());
   std::cout << "Resolving at t=" << context.get_time() << std::endl;
@@ -76,10 +79,20 @@ EventStatus ModelPredictiveController::UpdateAbstractState(
   optimizer_.ResetInitialConditions(q0, v0);
   TrajectoryOptimizerStats<double> stats;
   TrajectoryOptimizerSolution<double> solution;
+  const auto solve_start = std::chrono::steady_clock::now();
   optimizer_.SolveFromWarmStart(&warm_start_, &solution, &stats);
+  const auto solve_end = std::chrono::steady_clock::now();
 
   // Store the result in the discrete state
   StoreOptimizerSolution(solution, context.get_time(), &stored_trajectory);
+
+  const auto update_end = std::chrono::steady_clock::now();
+  using Ms = std::chrono::duration<double, std::milli>;
+  timing_log_.push_back({context.get_time(),
+                         Ms(update_end - update_start).count(),
+                         Ms(solve_end - solve_start).count(),
+                         1e3 * stats.solve_time,
+                         static_cast<int>(stats.iteration_times.size())});
 
   return EventStatus::Succeeded();
 }
@@ -135,6 +148,18 @@ void ModelPredictiveController::StoreOptimizerSolution(
   stored_trajectory->u =
       PiecewisePolynomial<double>::CubicWithContinuousSecondDerivatives(
           time_steps, u_knots);
+}
+
+void ModelPredictiveController::SaveTimingCsv(
+    const std::string& filename) const {
+  std::ofstream file(filename);
+  file << "sim_time,update_wall_ms,solve_wall_ms,solve_time_reported_ms,"
+          "iterations\n";
+  for (const UpdateTiming& row : timing_log_) {
+    file << row.sim_time << "," << row.update_wall_ms << ","
+         << row.solve_wall_ms << "," << row.solve_time_reported_ms << ","
+         << row.iterations << "\n";
+  }
 }
 
 Interpolator::Interpolator(const int nq, const int nv, const int nu)

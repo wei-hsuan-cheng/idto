@@ -9,6 +9,7 @@
 #include "examples/pd_plus_controller.h"
 #include <drake/common/fmt_eigen.h>
 #include <drake/systems/primitives/discrete_time_delay.h>
+#include <drake/systems/primitives/vector_log_sink.h>
 #include <drake/visualization/visualization_config_functions.h>
 
 namespace idto {
@@ -154,6 +155,10 @@ void TrajOptExample::RunModelPredictiveControl(
   builder.Connect(plant.get_state_output_port(),
                   controller->get_state_input_port());
 
+  // Instrumentation: log the simulated state at 100 Hz (sim_state.csv)
+  auto* state_logger = drake::systems::LogVectorOutput(
+      plant.get_state_output_port(), &builder, 0.01);
+
   // Compile the diagram
   auto diagram = builder.Build();
   std::unique_ptr<drake::systems::Context<double>> diagram_context =
@@ -171,9 +176,37 @@ void TrajOptExample::RunModelPredictiveControl(
 
   // Run the simulation, recording the result for later playback in MeshCat
   meshcat_->StartRecording();
+  const auto sim_start = std::chrono::steady_clock::now();
   simulator.AdvanceTo(options.sim_time);
+  const double sim_wall =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                    sim_start)
+          .count();
   meshcat_->StopRecording();
   meshcat_->PublishRecording();
+
+  // Timing instrumentation: real-time factor of the closed loop and the
+  // per-update MPC timing (mpc_timing.csv in the working directory)
+  std::cout << fmt::format(
+                   "Closed loop: simulated {:.3f} s in {:.3f} s wall-clock "
+                   "(sim/wall = {:.3f}), replan period {:.4f} s",
+                   options.sim_time, sim_wall, options.sim_time / sim_wall,
+                   replan_period)
+            << std::endl;
+  controller->SaveTimingCsv("mpc_timing.csv");
+  {
+    const auto& log = state_logger->FindLog(simulator.get_context());
+    std::ofstream file("sim_state.csv");
+    file << "t";
+    for (int i = 0; i < nq; ++i) file << ",q" << i;
+    for (int i = 0; i < nv; ++i) file << ",v" << i;
+    file << "\n";
+    for (int k = 0; k < log.num_samples(); ++k) {
+      file << log.sample_times()(k);
+      for (int i = 0; i < nq + nv; ++i) file << "," << log.data()(i, k);
+      file << "\n";
+    }
+  }
 
   if (options.save_mpc_result_as_static_html) {
     std::ofstream data_file;
