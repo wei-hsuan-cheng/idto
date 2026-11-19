@@ -7,11 +7,11 @@ State as of 2026-11-19. The plan is [evaluation_plan.md](evaluation_plan.md); re
 
 | what | where |
 |---|---|
-| fork | `github.com/wei-hsuan-cheng/idto`: `main` = upstream `de0629c` + the plan (`39c5022`); `eval/humble-x86` = the x86 evaluation; `eval/arm64` = it plus the Drake 1.53 port and native results (builds on both Drakes) |
+| fork | `github.com/wei-hsuan-cheng/idto`: `main` = upstream `de0629c` + the plan (`39c5022`); `eval/arm64` = the x86 evaluation, then the Drake 1.53 port and native results (the tree builds on both Drakes; the separate `eval/humble-x86` branch was deleted 2026-11-20) |
 | source | Mac `~/src/mpc/contact_implicit_mpc/idto` (the parent folder is not a git repo); remote `upstream` = TRI |
 | runs | Mac `~/src/mpc/contact_implicit_mpc/idto_runs/`: `run_examples.sh`, `examples/<name>/` (`run.log`, `mpc_timing.csv`, `sim_state.csv`, `solver_stats.csv`, some `meshcat_recording.html`), `gradient/`, `tests/`, `instrumentation.diff`, `yaml_recording.diff` |
-| VM | Parallels Ubuntu 24.04 aarch64, `ssh parallels@10.211.55.17`; the Mac's `~/src` is `/media/psf/Home/src`; about 3.8 GB disk free |
-| container (x86) | `idto_humble`: ROS 2 Humble, Ubuntu 22.04, **x86-64 under QEMU**, Drake 1.30.0 in `/opt/drake`; `/root/src` = the Mac's `~/src`; build in the named volume `idto_build` at `/root/idto_build`; Meshcat at `http://10.211.55.17:7000` |
+| VM | Parallels Ubuntu 24.04 aarch64, `ssh parallels@10.211.55.17`; the Mac's `~/src` is `/media/psf/Home/src`; about 5.0 GB disk free |
+| container (x86) | **removed 2026-11-20** (container, image, volume and the QEMU registration). It was `idto_humble`: ROS 2 Humble, Ubuntu 22.04, x86-64 under QEMU, Drake 1.30.0; recreate it from `docker/ros2_humble/` (below) |
 | container (native) | `idto_jazzy`: ROS 2 Jazzy, Ubuntu 24.04, **native ARM64**, Drake 1.53.0 in `/opt/drake`, built on the `ros_jazzy` image (virgl GPU); build in the volume `idto_build_arm64`; Meshcat at `http://10.211.55.17:7005`; branch `eval/arm64` |
 
 ## Resume
@@ -24,12 +24,14 @@ cmake --build /root/idto_build -j 8                              # from `bash -c
 OUT=/root/src/mpc/contact_implicit_mpc/idto_runs/arm64/examples bash /root/src/mpc/contact_implicit_mpc/idto_runs/run_examples.sh 600 [names...]
 ```
 
-x86 Humble (IDTO's supported setup):
+x86 Humble (IDTO's supported setup; removed, recreate it):
 
 ```bash
-# on the VM, after a reboot only: x86 emulation (not persistent)
+# on the VM: x86 emulation (lost on every reboot), then the image (about 15 min) and the container
 docker run --privileged --rm tonistiigi/binfmt --install amd64
-docker start idto_humble            # or, from the repo: docker compose -f docker/ros2_humble/docker-compose.yml up -d
+cd /media/psf/Home/src/mpc/contact_implicit_mpc/idto
+docker compose -f docker/ros2_humble/docker-compose.yml build && docker compose -f docker/ros2_humble/docker-compose.yml up -d
+docker exec idto_humble bash -c "cmake -S /root/src/mpc/contact_implicit_mpc/idto -B /root/idto_build"   # then build as below
 docker exec -it idto_humble bash
 # inside
 cmake --build /root/idto_build -j 4                     # after any source or YAML edit

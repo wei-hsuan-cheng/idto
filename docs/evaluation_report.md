@@ -272,7 +272,7 @@ The contact point and the contacting material points are different objects, and 
 | change | why | where |
 |---|---|---|
 | QEMU x86-64 binfmt registration on the VM (`tonistiigi/binfmt --install amd64`, per boot) | Drake 1.30.0 has no ARM64 Linux build | VM kernel; not persistent |
-| `docker/ros2_humble/{Dockerfile,docker-compose.yml}`: ros:humble-ros-base amd64, Drake 1.30.0 in `/opt/drake`, `install_prereqs`, `libgflags-dev`, `scipy==1.12`, `mesa-utils`; source mounted, build in the named volume `idto_build`; X11/GPU wiring as `ros_jazzy` | Humble container as requested; slim (2.4 GB) because the VM had 8.6 GB free | fork, branch `eval/humble-x86` |
+| `docker/ros2_humble/{Dockerfile,docker-compose.yml}`: ros:humble-ros-base amd64, Drake 1.30.0 in `/opt/drake`, `install_prereqs`, `libgflags-dev`, `scipy==1.12`, `mesa-utils`; source mounted, build in the named volume `idto_build`; X11/GPU wiring as `ros_jazzy` | Humble container as requested; slim (2.4 GB) because the VM had 8.6 GB free | fork, `docker/ros2_humble/` |
 | none to IDTO's source for building | builds as-is on 22.04 + Drake 1.30 | |
 | MPC timing and closed-loop state logging (`examples/mpc_controller.{h,cc}`, `examples/example_base.cc`) | per-update latency, sim/wall, outcomes | `instrumentation.diff` |
 | `save_mpc_result_as_static_html: true` in spinner, dual_jaco, mini_cheetah, allegro_hand YAMLs | Meshcat recordings to inspect | `yaml_recording.diff`; evaluation only, reverted in the fork |
