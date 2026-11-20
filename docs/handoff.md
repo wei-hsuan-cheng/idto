@@ -1,7 +1,8 @@
 # Handoff: IDTO Evaluation
 
 Updated 2026-11-20.
-For the build and example commands, follow the [README](../README.md#build-and-test).
+For a fresh installation, follow the [README](../README.md#installation).
+For the existing environment and example commands, follow [Running Examples](running_examples.md).
 The [evaluation report](evaluation_report.md) contains the recorded results.
 
 

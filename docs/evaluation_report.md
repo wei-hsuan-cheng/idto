@@ -1,7 +1,7 @@
 # IDTO Evaluation
 
 Recorded evaluation from 2026-11-19, with documentation simplified on 2026-11-20.
-Follow the [README](../README.md#build-and-test) for the current build and test procedure.
+Follow the [README](../README.md#installation) for installation and [Running Examples](running_examples.md) for the current test procedure.
 The [handoff](handoff.md) summarizes remaining work.
 
 This report describes existing measurements.

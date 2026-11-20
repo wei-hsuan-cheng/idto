@@ -19,7 +19,8 @@ spheres approximating robot links or objects.
 
 ## Environment and Build
 
-Follow [Build and Test](../README.md#build-and-test) using the existing `idto_jazzy` container.
+Follow [Installation](../README.md#installation) for a fresh environment.
+Use [Running Examples](running_examples.md) for the existing `idto_jazzy` container.
 Record the checkout SHA, OS, CPU, RAM, compiler, Python, and Drake versions with each evaluation.
 Keep Python bindings and `pydrake` consistent with the C++ Drake installation.
 
