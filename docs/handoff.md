@@ -1,73 +1,72 @@
-# Handoff: IDTO evaluation
+# Handoff: IDTO Evaluation
 
-State as of 2026-11-19. The plan is [evaluation_plan.md](evaluation_plan.md); results are in
-[evaluation_report.md](evaluation_report.md).
+Updated 2026-11-20.
+For the build and example commands, follow the [README](../README.md#build-and-test).
+The [evaluation report](evaluation_report.md) contains the recorded results.
 
-## Where things are
 
-| what | where |
-|---|---|
-| fork | `github.com/wei-hsuan-cheng/idto`: `main` = upstream `de0629c` + the plan (`39c5022`); `eval/arm64` = the x86 evaluation, then the Drake 1.53 port and native results (the tree builds on both Drakes; the separate `eval/humble-x86` branch was deleted 2026-11-20) |
-| source | Mac `~/src/mpc/contact_implicit_mpc/idto` (the parent folder is not a git repo); remote `upstream` = TRI |
-| runs | Mac `~/src/mpc/contact_implicit_mpc/idto_runs/`: `run_examples.sh`, `examples/<name>/` (`run.log`, `mpc_timing.csv`, `sim_state.csv`, `solver_stats.csv`, some `meshcat_recording.html`), `gradient/`, `tests/`, `instrumentation.diff`, `yaml_recording.diff` |
-| VM | Parallels Ubuntu 24.04 aarch64, `ssh parallels@10.211.55.17`; the Mac's `~/src` is `/media/psf/Home/src`; about 5.0 GB disk free |
-| container (x86) | **removed 2026-11-20** (container, image, volume and the QEMU registration). It was `idto_humble`: ROS 2 Humble, Ubuntu 22.04, x86-64 under QEMU, Drake 1.30.0; recreate it from `docker/ros2_humble/` (below) |
-| container (native) | `idto_jazzy`: ROS 2 Jazzy, Ubuntu 24.04, **native ARM64**, Drake 1.53.0 in `/opt/drake`, built on the `ros_jazzy` image (virgl GPU); build in the volume `idto_build_arm64`; Meshcat at `http://10.211.55.17:7005`; branch `eval/arm64` |
+## Workspace
 
-## Resume
+| Item | Location |
+| --- | --- |
+| Source | Mac: `~/src/mpc/contact_implicit_mpc/idto`; container: `/root/src/mpc/contact_implicit_mpc/idto` |
+| Runs | Adjacent `idto_runs/`, containing logs, CSVs, recordings, and `run_examples.sh` |
+| VM | `ssh parallels@10.211.55.17`; the Mac's `~/src` is mounted at `/media/psf/Home/src` |
+| Container | `idto_jazzy`: Ubuntu 24.04, ROS 2 Jazzy, Drake 1.53 in `/opt/drake` |
+| Build | `/root/idto_build`, stored in a persistent Docker volume |
+| Visualization | Meshcat at `http://10.211.55.17:7005` while an example runs |
 
-Native ARM64 (real-time timing):
+The parent `contact_implicit_mpc` directory is not a Git repository.
+The source repository is the fork `wei-hsuan-cheng/idto`, with `upstream` pointing to Toyota Research Institute.
 
-```bash
-docker start idto_jazzy && docker exec -it idto_jazzy bash      # no QEMU needed
-cmake --build /root/idto_build -j 8                              # from `bash -c`, without sourcing ROS
-OUT=/root/src/mpc/contact_implicit_mpc/idto_runs/arm64/examples bash /root/src/mpc/contact_implicit_mpc/idto_runs/run_examples.sh 600 [names...]
-```
 
-x86 Humble (IDTO's supported setup; removed, recreate it):
+## Current Implementation
 
-```bash
-# on the VM: x86 emulation (lost on every reboot), then the image (about 15 min) and the container
-docker run --privileged --rm tonistiigi/binfmt --install amd64
-cd /media/psf/Home/src/mpc/contact_implicit_mpc/idto
-docker compose -f docker/ros2_humble/docker-compose.yml build && docker compose -f docker/ros2_humble/docker-compose.yml up -d
-docker exec idto_humble bash -c "cmake -S /root/src/mpc/contact_implicit_mpc/idto -B /root/idto_build"   # then build as below
-docker exec -it idto_humble bash
-# inside
-cmake --build /root/idto_build -j 4                     # after any source or YAML edit
-ctest --test-dir /root/idto_build --output-on-failure   # 23 tests
-cd /root/src/mpc/contact_implicit_mpc/idto_runs/mine && /root/idto_build/examples/mini_cheetah/mini_cheetah
-bash /root/src/mpc/contact_implicit_mpc/idto_runs/run_examples.sh 3600 [names...]
-/root/idto_build/examples/allegro_hand/contact_gradient_check --ball_spin 2 --gradients_method autodiff
-```
+IDTO optimizes only the configuration trajectory.
+Velocities and accelerations follow from finite differences.
+Drake supplies geometry, kinematics, and rigid-body inverse dynamics.
+IDTO supplies a smooth signed-distance contact force law and a Gauss-Newton optimizer.
+The MPC loop shifts the previous trajectory and runs one or two trust-region iterations per update.
 
-## Done
+The planning and simulation contact models are different.
+Planning uses IDTO's smooth compliant contact.
+Simulation uses Drake contact, with the YAML selecting the discrete contact approximation.
 
-- Humble x86 container (`docker/ros2_humble/`). IDTO builds with no source changes, in 12.5 min emulated.
-- Tests: 23/23 ctest pass. The example tests are smoke tests only: `--test` means no MPC and 10 iterations.
-- Examples: all 13 runs exit 0 and reach their tasks (report section 3).
-- MPC timing instrumentation (`mpc_timing.csv`, sim/wall, `sim_state.csv`). Emulated rates are 1/4-1/8 of the
-  configured ones, with 100 % deadline misses (report section 4).
-- Gradient check (`contact_gradient_check`):
-  - sphere-sphere witness points are exact;
-  - the configured derivatives match central differences to about 2e-7;
-  - **all gradient methods drop dN+/dq**, giving 0.1-6.6 % error along a rotating floating base.
+Timing and state logging are implemented in `examples/mpc_controller.{h,cc}` and `examples/example_base.cc`.
+The moving-contact derivative checker is `examples/allegro_hand/contact_gradient_check.cc`.
 
-## Traps
 
-- **QEMU registration is lost on VM reboot.** Without it the x86 container fails with "exec format error".
-- **A source YAML edit needs a rebuild.** Binaries read the build-tree copy.
-- **A new CMake target needs an explicit reconfigure** (`cmake -S ... -B ...`). `make <new-target>` fails first.
-- **Drake scopes geometry names** (`ball::ball_collision`). Match pairs by `GeometryId`.
-- **First runs need network.** Drake's `PackageMap` downloads RobotLocomotion/models (Allegro, Jaco).
-- **No GPU in the x86 container.** QEMU does not pass the virtio-GPU through, so rendering is `llvmpipe`. IDTO does
-  not need a GPU; Meshcat renders in the browser.
-- **Meshcat only lives while an example runs.** For a replay, set `save_mpc_result_as_static_html: true` in the YAML.
+## Recorded Results
 
-## Open
+- All 23 registered tests passed.
+- Existing examples were evaluated with logs and CSVs preserved in the adjacent runs directory.
+- Typical solve latency is below the requested update period, but isolated deadline misses exist.
+- Sphere-sphere witness points match the closed-form geometry.
+- Hand-joint derivatives match independent central differences to about 2e-7 with the configured forward-difference method.
+- Rotating floating-base derivatives have a systematic error of up to about 6.6 percent because the velocity derivatives omit the configuration derivative of the velocity map.
+- Allegro, Punyo, and Hopper use `sim_discrete_contact_approximation: "tamsi"` to retain their earlier simulation behavior.
+- The two-arm box example does not reproduce the earlier result under either tested contact solver.
 
-1. **Native ARM64 timing: done** (report section 8). Every MPC example is real time with 2.6-7.9x headroom on Drake
-   1.53. dual_jaco's closed loop does not reproduce Drake 1.30 under either solver (hydroelastic simulation changes).
-2. **Floating-base derivative.** Add the dN+/dq term, or switch to a Lie-group velocity parameterization.
-3. **Constraints and runtime for a WB-ID MPC.** Inequality constraints (torque and joint limits) and an asynchronous
-   MPC runtime.
+These are recorded evaluation findings, not new tests performed during the documentation cleanup.
+
+
+## Practical Notes
+
+- Do not source ROS before building.
+- Rebuild after editing source YAMLs because the executable reads build-tree copies.
+- Reconfigure CMake after adding a target.
+- Use a unique working directory per run to avoid overwriting CSVs.
+- The first run of some examples downloads models.
+- Geometry names are scoped by model instance; match contact pairs by `GeometryId`.
+- Meshcat closes when the executable exits; enable an HTML recording before rebuilding if playback is needed.
+- `solver_stats.csv` records the initial solve; use `mpc_timing.csv` for MPC timing.
+- `--test` is only a smoke test and does not run MPC.
+
+
+## Remaining Work
+
+1. Correct the rotating floating-base derivatives, including the missing configuration derivative of the velocity map, and rerun the gradient checker.
+2. Investigate the two-arm box simulation discrepancy without confusing simulation contact behavior with optimizer changes.
+3. Add explicit torque and joint-limit handling before treating this as a whole-body controller.
+4. Add asynchronous solving, observation and policy timestamps, and stale-policy handling for deployment.
+5. Rebenchmark after each functional change, recording tail latency and deadline misses rather than only reciprocal median solve time.

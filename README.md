@@ -1,10 +1,7 @@
-# Inverse Dynamics Trajectory Optimization 
+# Inverse Dynamics Trajectory Optimization
 
-Implements the contact-implicit trajectory optimization algorithm described in 
-
-[Inverse Dynamics Trajectory Optimization for Contact-Implicit Model Predictive
-Control](https://idto.github.io/) by Vince Kurtz, Alejandro Castro, Aykut Özgün
-Önol, and Hai Lin. https://arxiv.org/abs/2309.01813.
+Implements the contact-implicit trajectory optimization algorithm described in [Inverse Dynamics Trajectory Optimization for Contact-Implicit Model Predictive Control](https://idto.github.io/) by Vince Kurtz, Alejandro Castro, Aykut Özgün Önol, and Hai Lin.
+See the [paper](https://arxiv.org/abs/2309.01813) for the formulation.
 
 <img src="img/mini_cheetah.png" width="200"><img src="img/dual_jaco.png" width="200"><img src="img/allegro.png" width="200">
 
@@ -12,198 +9,168 @@ Control](https://idto.github.io/) by Vince Kurtz, Alejandro Castro, Aykut Özgü
 
 <img src="img/jaco.png" width="200"><img src="img/acrobot.png" width="200"><img src="img/punyo.png" width="200">
 
-## Docker Quickstart
 
-Clone this repository:
+## Build and Test
+
+Use the existing `idto_jazzy` container with Ubuntu 24.04 and Drake 1.53.
+The examples use Drake simulation and Meshcat visualization, not ROS launch or MuJoCo.
+
+
+### 1. Enter the Container
+
+From the Mac:
 
 ```bash
-git clone https://github.com/ToyotaResearchInstitute/idto/
-cd idto
+ssh parallels@10.211.55.17
+docker start idto_jazzy
+docker exec -it idto_jazzy bash --noprofile --norc
 ```
 
-Build the docker image, compiling the C++ code and python bindings.
+Do not source ROS before building.
+The Mac source directory is available at `/root/src/mpc/contact_implicit_mpc/idto` inside the container.
+
+
+### 2. Build
+
+Inside the container:
 
 ```bash
-docker build -t idto .
+cmake --build /root/idto_build -j 8
 ```
 
-Enter the docker container, forwarding
-port 7000 for meshcat visualization:
+If the build directory has not been configured, configure it first:
 
 ```bash
-docker run -p 7000:7000 -it idto
+cmake -S /root/src/mpc/contact_implicit_mpc/idto -B /root/idto_build
+cmake --build /root/idto_build -j 8
 ```
 
-Inside the container, you can run any of the examples, for instance:
+Rebuild after changing an example YAML.
+The executables read configuration copies from the build directory.
+
+
+### 3. Run an Example
+
+Use a separate working directory for each run to preserve its CSV files:
+
 ```bash
+RUN=/root/src/mpc/contact_implicit_mpc/idto_runs/manual_$(date +%Y%m%d_%H%M%S)/mini_cheetah
+mkdir -p "$RUN"
+cd "$RUN"
+/root/idto_build/examples/mini_cheetah/mini_cheetah
+```
+
+Open [Meshcat](http://10.211.55.17:7005) in the Mac browser while the example runs.
+The example first computes an initial trajectory, then starts MPC.
+Run one example at a time.
+Press `Ctrl+C` to stop it.
+
+
+### Available Examples
+
+Choose one command and use its own working directory:
+
+```bash
+# Finger flicking a spinner
+/root/idto_build/examples/spinner/spinner
+
+# Hand rotating a ball
+/root/idto_build/examples/allegro_hand/allegro_hand
+
+# Arm rolling a ball
+/root/idto_build/examples/jaco_ball/jaco_ball
+
+# Arm manipulating a box
+/root/idto_build/examples/jaco/jaco
+
+# Two arms manipulating a box
+/root/idto_build/examples/dual_jaco/dual_jaco
+
 # Quadruped locomotion
-$ ./build/examples/mini_cheetah/mini_cheetah
+/root/idto_build/examples/mini_cheetah/mini_cheetah
 
-# Bi-manual box manipulation
-$ ./build/examples/dual_jaco/dual_jaco
+# Hopping robot
+/root/idto_build/examples/hopper/hopper
 
-# A robot hand rotates a sphere
-$ ./build/examples/allegro_hand/allegro_hand
+# Compliant humanoid lifting a ball
+/root/idto_build/examples/punyo/punyo
 
-# A two-link finger flicks a spinner
-$ ./build/examples/spinner/spinner
+# Pendulum and acrobot swing-up
+/root/idto_build/examples/pendulum/pendulum
+/root/idto_build/examples/acrobot/acrobot
 
-# A robot arm rolls a ball
-$ ./build/examples/jaco_ball/jaco_ball
-
-# A simple planar hopping robot
-$ ./build/examples/hopper/hopper
-
-# Pendulum swingup
-$ ./build/examples/pendulum/pendulum
-
-# Acrobot swingup
-$ ./build/examples/acrobot/acrobot
-
-# Single arm box manipulation
-$ ./build/examples/jaco/jaco
-
-# A compliant humanoid lifts a large ball
-$ ./build/examples/punyo/punyo
-
-# Drive the quadruped around with a joystick
-$ ./python_examples/mini_cheetah_mpc.py
+# Open-loop trajectory optimization and playback
+/root/idto_build/examples/kuka/kuka
+/root/idto_build/examples/airhockey/airhockey
+/root/idto_build/examples/allegro_hand/allegro_hand --upside_down
 ```
 
-Open a web browser to http://localhost:7000 to see the visualization.
+Most examples run closed-loop MPC.
+The last three commands perform open-loop optimization and playback rather than closed-loop simulation.
+The current two-arm box example does not reproduce the older Drake version's result; see the [evaluation report](docs/evaluation_report.md).
 
-## Local Installation
 
-The only dependency is [Drake](https://drake.mit.edu/installation.html). 
-We recommend Ubuntu 22.04 and Drake v1.30.0. Other configurations may work
-but are untested.
+### 4. Run Registered Tests
 
-For example, for a binary Drake installation at `$HOME/drake`:
-
-Download and extract the binaries:
+Inside the container:
 
 ```bash
-cd $HOME
-wget https://github.com/RobotLocomotion/drake/releases/download/v1.30.0/drake-1.30.0-jammy.tar.gz
-tar -xvzf drake-1.30.0-jammy.tar.gz
+ctest --test-dir /root/idto_build --output-on-failure
 ```
 
-Install Drake dependencies and gflags:
+The registered example tests are smoke tests.
+Their `--test` flag disables MPC and runs only ten optimizer iterations.
+
+
+### 5. Run a Batch
+
+The existing workspace helper saves separate logs and CSV files per example:
 
 ```bash
-cd $HOME/drake
-sudo ./share/drake/setup/install_prereqs
-sudo apt-get install libgflags-dev
+OUT=/root/src/mpc/contact_implicit_mpc/idto_runs/manual_$(date +%Y%m%d_%H%M%S) \
+bash /root/src/mpc/contact_implicit_mpc/idto_runs/run_examples.sh \
+600 spinner mini_cheetah allegro_hand
 ```
 
-Update environment variables:
+The timeout is 600 seconds per example.
+Omit the example names to run all examples.
+The helper is in the adjacent `idto_runs` directory, not part of this Git repository.
 
-```bash
-echo 'export CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:${HOME}/drake' >> ~/.bashrc
-echo 'export PYTHONPATH=${PYTHONPATH}:${HOME}/drake/lib/python3.10/site-packages' >> ~/.bashrc
-source ~/.bashrc
-```
 
-### C++
+## Configuration and Outputs
 
-Clone this repository:
+Edit `examples/<name>/<name>.yaml`, then rebuild before running.
 
-```bash
-git clone https://github.com/ToyotaResearchInstitute/idto/
-```
+| Setting | Meaning |
+| --- | --- |
+| `mpc` | Closed-loop MPC when true; a single trajectory optimization otherwise |
+| `time_step`, `num_steps` | Optimization timestep and horizon length in steps |
+| `mpc_iters` | Optimizer iterations per MPC update |
+| `controller_frequency` | Requested MPC update frequency |
+| `num_threads` | Parallel computation threads |
+| `sim_time`, `sim_realtime_rate` | Simulation duration and playback speed limit |
+| `save_mpc_result_as_static_html` | Save a browser-viewable MPC recording |
+| `static_html_filename` | Saved recording path |
 
-Configure and build:
+The live Meshcat server closes when the example exits.
+To retain playback, enable `save_mpc_result_as_static_html` and set a unique `static_html_filename` before rebuilding.
 
-```bash
-cd idto
-mkdir build && cd build
-cmake ..
-make -j
-```
+| Output | Contents |
+| --- | --- |
+| `mpc_timing.csv` | Per-update solve and full controller-update latency |
+| `sim_state.csv` | Simulated state sampled at 100 Hz |
+| `solver_stats.csv` | Initial trajectory optimization statistics, not MPC update timing |
+| `run.log` | Console output when using the batch helper |
 
-(Optional) run unit tests:
+The first use of some models requires network access for Drake's model downloads.
 
-```bash
-ctest
-```
 
-### Python
+## Further Reading
 
-A limited subset of functionality is available via python bindings.
+- [Evaluation report](docs/evaluation_report.md): results, contact gradients, timing, and limitations.
+- [Handoff](docs/handoff.md): current implementation status and remaining work.
+- [Evaluation plan](docs/evaluation_plan.md): checks for future changes.
 
-Build and install with pip:
-
-```bash
-git clone https://github.com/ToyotaResearchInstitute/idto/
-cd idto
-pip install .
-```
-
-(Optional) run unit tests:
-
-```bash
-pytest
-```
-
-**Note:** The python bindings assume that the `pydrake` version you are using 
-is the one used to build `pyidto`. A separate `pydrake` installation (e.g.,
-from `pip install drake`) may not work.
-
-## Examples
-
-All of the examples use meshcat for visualization. A link will appear in the
-terminal, or just go ahead and open http://localhost:7000 in a browser.
-
-### C++
-
-The `examples` folder contains various examples, including those described in
-[our paper](https://idto.github.io). After building, run them with, e.g.,
-```
-./build/examples/spinner/spinner
-```
-
-Most of the examples (e.g., `spinner`) run a simulation with contact-implicit
-model predictive control. Some others (e.g., `kuka`) perform a single open-loop
-trajectory optimization.
-
-Problem definitions, solver parameters, whether to run MPC, etc. are set in YAML
-config files, e.g., `spinner.yaml`. Here are some common options:
-
-- `mpc : {true, false}` choose whether or not to run MPC. If this is set to
-  true, Meshcat will show and record a simulation where IDTO is used as an MPC
-  controller. 
-- `num_threads : N` sets the number of threads used for parallel derivative
-  computations.
-- `play_target_trajectory : {true, false}` whether to play an animation of the
-  target trajectory over Meshcat. 
-- `play_initial_guess : {true, false}` whether to play an animation of the
-  initial guess over Meshcat.
-- `play_optimal_trajectory : {true, false}` whether to play an animation of the
-  optimal trajectory over Meshcat. This is not a simulation: the generated
-  trajectory may or may not be dynamically feasible. 
-
-**NOTE** 
-If Meshcat plays multiple things, only the last one will be recorded for
-playback via the dropdown menu. For example, if `play_target_trajectory`,
-`play_optimal_trajectory`, and `mpc` are all set to `true`, Meshcat will first
-play the target trajectory, followed by the open-loop solution, followed by a
-simulation with MPC. Only the simulation will be saved for playback.
-
-### Python
-
-Examples that use the python bindings are in the `python_examples` folder. 
-
-For instance, to run open-loop optimization with the spinner:
-```bash
-./python_examples/spinner_open_loop.py
-```
-
-To run quaduped MPC, with the target velocity read from joystick commands:
-```bash
-./python_examples/mini_cheetah_mpc.py
-```
-
-**WARNING**
-The python bindings do not currently perform all the size checks that the C++
-version does. If you implement a new system, be sure to check the dimensions
-of the cost matrices and target configurations carefully.
+The core optimizer also has Python bindings under `python_bindings` and examples under `python_examples`.
+Use the same Drake installation for C++ and `pydrake`.
+The bindings do not perform all the dimension checks of the C++ interface.

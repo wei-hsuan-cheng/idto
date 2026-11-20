@@ -17,65 +17,40 @@ point for multi-contact, surface-aware whole-body inverse-dynamics MPC.
 I particularly care about contacts moving along spherical surfaces and multiple
 spheres approximating robot links or objects.
 
-## Environment and build
+## Environment and Build
 
-1. Read applicable AGENTS.md instructions and the repository README.
-2. Record the checkout SHA, OS, CPU, RAM, compiler, Python, and Drake versions.
-3. Follow the repository's supported installation instructions. The inspected
-   README recommends Ubuntu 22.04 and Drake 1.30.0.
-4. Prefer the provided Docker setup when appropriate. Diagnose recoverable
-   problems and document any required changes.
-5. Keep Python bindings and pydrake consistent with the Drake C++ installation.
+Follow [Build and Test](../README.md#build-and-test) using the existing `idto_jazzy` container.
+Record the checkout SHA, OS, CPU, RAM, compiler, Python, and Drake versions with each evaluation.
+Keep Python bindings and `pydrake` consistent with the C++ Drake installation.
 
-Starting commands:
+Inside the container:
 
 ```bash
-git clone https://github.com/ToyotaResearchInstitute/idto.git
-cd idto
-git rev-parse HEAD
-docker build -t idto .
-docker run --name idto-test -it \
-  -p 127.0.0.1:7000:7000 \
-  idto
+cmake --build /root/idto_build -j 8
+ctest --test-dir /root/idto_build --output-on-failure
 ```
 
-For a compatible native Drake installation:
-
-```bash
-cmake -S . -B build
-cmake --build build -j 4
-```
-
-## Run registered tests
-
-```bash
-ctest --test-dir build -N
-ctest --test-dir build --output-on-failure
-```
-
-Run existing Python tests if the bindings are installed.
-
-Inspect what each test actually checks. In the shared example runner, --test
-disables MPC and performs a shortened optimization, so also run normal examples.
+The registered example tests use `--test`, which disables MPC and performs ten iterations.
+Also run normal examples and inspect their closed-loop behavior.
 
 ## Run the examples
 
 Run these sequentially, preserving logs and generated CSV files per example:
 
 ```bash
-./build/examples/pendulum/pendulum
-./build/examples/acrobot/acrobot
-./build/examples/spinner/spinner
-./build/examples/hopper/hopper
-./build/examples/jaco_ball/jaco_ball
-./build/examples/jaco/jaco
-./build/examples/dual_jaco/dual_jaco
-./build/examples/mini_cheetah/mini_cheetah
-./build/examples/allegro_hand/allegro_hand
-./build/examples/allegro_hand/allegro_hand --upside_down
-./build/examples/kuka/kuka
-./build/examples/punyo/punyo
-./build/examples/airhockey/airhockey
+/root/idto_build/examples/pendulum/pendulum
+/root/idto_build/examples/acrobot/acrobot
+/root/idto_build/examples/spinner/spinner
+/root/idto_build/examples/hopper/hopper
+/root/idto_build/examples/jaco_ball/jaco_ball
+/root/idto_build/examples/jaco/jaco
+/root/idto_build/examples/dual_jaco/dual_jaco
+/root/idto_build/examples/mini_cheetah/mini_cheetah
+/root/idto_build/examples/allegro_hand/allegro_hand
+/root/idto_build/examples/allegro_hand/allegro_hand --upside_down
+/root/idto_build/examples/kuka/kuka
+/root/idto_build/examples/punyo/punyo
+/root/idto_build/examples/airhockey/airhockey
 ```
 
 Verify paths and supported flags against the checkout.
